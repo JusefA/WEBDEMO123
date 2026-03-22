@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <title>Vaalit - Tutkijasovellus</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="stylesheet" href="style.css" />
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      crossorigin=""
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      crossorigin=""
+      defer
+    ></script>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"
+      defer
+    ></script>
+
+    <!-- Core libraries (must load before election modules) -->
+    <script src="js/pxlib.js" defer></script>
+    <script src="js/chartlib.js" defer></script>
+    <script src="js/maphelper.js" defer></script>
+
+    <!-- Election modules -->
+    <script src="js/elections.js" defer></script>
+    <script src="kuntavaalit/kuntavaalit_candidates.js" defer></script>
+    <script src="kuntavaalit/kuntavaalit_voters.js" defer></script>
+    <script src="eduskuntavaalit/eduskuntavaalit_voters.js" defer></script>
+  </head>
+
+  <body>
+    <header class="topbar">
+      <h1>Vaalit - datanäkymä</h1>
+      <div id="status" class="status"></div>
+    </header>
+
+    <div class="topControls">
+      <label>
+        Election Type
+        <select id="electionType">
+          <option value="municipal">Municipal Elections</option>
+          <option value="presidential">Presidential Elections</option>
+          <option value="eduskunta">Parliamentary Elections</option>
+        </select>
+      </label>
+
+      <!-- Only visible for municipal elections -->
+      <label id="muniDatasetWrap">
+        Näkymä
+        <select id="muniDatasetSelect">
+          <option value="voters">Äänestäjät</option>
+          <option value="candidates">Ehdokkaat</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- MUNICIPAL -->
+    <section id="municipalSection" class="layout">
+      <section class="leftPane">
+        <div class="card">
+          <h2>Suodattimet</h2>
+          <div class="filters">
+
+            <!-- ── Äänestäjät filters (14yj + 14yv) ── -->
+            <div id="voterFilters">
+              <label>
+                Vuosi
+                <select id="yearSelect"></select>
+              </label>
+
+              <label>
+                Filtterit
+                <select id="sexMeasureSelect">
+                  <option value="aanet">Äänimäärä yhteensä</option>
+                </select>
+              </label>
+
+              <label>
+                Alue
+                <select id="geoSelect"></select>
+              </label>
+
+              <div class="filterDivider"></div>
+
+              <label>
+                Tieto: Miehet / Naiset
+                <select id="voterVarSelect"></select>
+              </label>
+            </div>
+
+            <!-- ── Ehdokkaat filters (14uh) ── -->
+            <div id="candidateFilters" style="display:none;">
+              <label>
+                Vuosi
+                <select id="uhYearSelect"></select>
+              </label>
+
+              <label>
+                Vaalipiiri
+                <select id="uhDistrictSelect"></select>
+              </label>
+
+              <label>
+                Puolue
+                <select id="uhPartySelect"></select>
+              </label>
+
+              <label>
+                Sukupuoli
+                <select id="uhGenderSelect"></select>
+              </label>
+
+              <label>
+                Tieto
+                <select id="uhInfoSelect"></select>
+              </label>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Suomen kartta</h2>
+          <div id="map"></div>
+        </div>
+      </section>
+
+      <section class="rightPane">
+
+        <!-- ── Äänestäjät KPIs (14yv) ── -->
+        <div id="voterKpiRow" class="cardsRow">
+          <div class="kpiCard">
+            <div class="kpiLabel">Äänioikeutettuja</div>
+            <div id="voterKpiEligible" class="kpiValue">-</div>
+          </div>
+          <div class="kpiCard">
+            <div class="kpiLabel">Äänestäneitä</div>
+            <div id="voterKpiVoted" class="kpiValue">-</div>
+          </div>
+          <div class="kpiCard kpiCard--accent2">
+            <div class="kpiLabel">Äänestysprosentti</div>
+            <div id="voterKpiTurnout" class="kpiValue">-</div>
+          </div>
+        </div>
+
+        <!-- ── Ehdokkaat KPIs (14uh) ── -->
+        <div id="candidateKpiRow" class="cardsRow" style="display:none;">
+          <div class="kpiCard">
+            <div class="kpiLabel">Valittuja yhteensä</div>
+            <div id="kpiCount" class="kpiValue">-</div>
+          </div>
+          <div class="kpiCard">
+            <div class="kpiLabel">Puolueita aineistossa</div>
+            <div id="kpiParties" class="kpiValue">-</div>
+          </div>
+          <div class="kpiCard">
+            <div class="kpiLabel">Vaalipiirit</div>
+            <div id="kpiGeos" class="kpiValue">-</div>
+          </div>
+        </div>
+
+        <!-- ── Ehdokkaat: age donut (14uh) ── -->
+        <div class="card" id="muniElectedCard" style="display:none;">
+          <h2 id="muniElectedTitle">Valitut ikäluokittain</h2>
+          <canvas id="muniElectedDonut"></canvas>
+          <p class="hint">
+            Kaavio näyttää valittujen osuuden ikäluokittain valitulla vuodella ja vaalipiirillä.
+          </p>
+        </div>
+
+        <!-- ── Party bar - shared canvas, content changes by view ── -->
+        <div class="card">
+          <h2 id="partyBarTitle">Puoluejärjestys valitulla alueella</h2>
+          <canvas id="partyBar"></canvas>
+        </div>
+
+        <!-- ── Sex bar - shared canvas, content changes by view ── -->
+        <div class="card">
+          <h2 id="sexBarTitle">Äänet sukupuolen ja puolueen mukaan</h2>
+          <canvas id="sexBar"></canvas>
+        </div>
+
+
+          <div class="card" id="voterTrendCard">
+            <h2>Trendi: Miehet / Naiset</h2>
+            <canvas id="voterTrendLine"></canvas>
+            <p class="hint">Kehitys kuntavaaleissa 2008-2025 valitulla alueella.</p>
+          </div>
+        </div>
+
+      </section>
+    </section><!-- /municipalSection -->
+
+    <!-- PRESIDENTIAL -->
+    <section id="presidentialSection" class="layout" style="display: none;">
+      <section class="leftPane">
+        <div class="card">
+          <h2>Presidentinvaali - suodattimet</h2>
+          <div class="filters">
+            <label>
+              Vuosi
+              <select id="presYearSelect"></select>
+            </label>
+
+            <label>
+              Kierros
+              <select id="presRoundSelect"></select>
+            </label>
+
+            <label>
+              Alue
+              <select id="presGeoSelect"></select>
+            </label>
+
+            <div class="filterDivider"></div>
+
+            <label>
+              Tieto: Miehet / Naiset
+              <select id="presVoterVarSelect"></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Presidentinvaalin kartta</h2>
+          <div id="presMap"></div>
+          <p class="hint">Klikkaa kuntaa kartalta päivittääksesi kaaviot.</p>
+        </div>
+      </section>
+
+      <section class="rightPane">
+
+        <!-- KPIs -->
+        <div class="cardsRow">
+          <div class="kpiCard">
+            <div class="kpiLabel">Äänioikeutettuja</div>
+            <div id="presKpiEligible" class="kpiValue">-</div>
+          </div>
+          <div class="kpiCard">
+            <div class="kpiLabel">Äänestäneitä</div>
+            <div id="presKpiVoted" class="kpiValue">-</div>
+          </div>
+          <div class="kpiCard kpiCard--accent2">
+            <div class="kpiLabel">Äänestysprosentti</div>
+            <div id="presKpiTurnout" class="kpiValue">-</div>
+          </div>
+        </div>
+
+        <!-- Tiedot bar -->
+        <div class="card">
+          <h2>Ehdokkaiden äänimäärät (koko maa)</h2>
+          <canvas id="presPartyBar"></canvas>
+        </div>
+
+
+        <!-- Gender trend -->
+        <div class="card">
+          <h2>Trendi: Miehet / Naiset</h2>
+          <canvas id="presVoterTrendLine"></canvas>
+          <p class="hint">Kehitys presidentinvaaleissa 1994-2024 valitulla alueella.</p>
+        </div>
+
+      </section>
+    </section>
+
+
+    <!-- EDUSKUNTAVAALIT -->
+    <section id="eduskuntaSection" class="layout" style="display: none;">
+      <section class="leftPane">
+        <div class="card">
+          <h2>Suodattimet</h2>
+          <div class="filters">
+            <label>
+              Vuosi
+              <select id="edYearSelect"></select>
+            </label>
+
+            <label>
+              Alue
+              <select id="edGeoSelect"></select>
+            </label>
+
+            <div class="filterDivider"></div>
+
+            <label>
+              Tieto: Miehet / Naiset
+              <select id="edVoterVarSelect"></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Suomen kartta</h2>
+          <div id="edMap"></div>
+        </div>
+      </section>
+
+      <section class="rightPane">
+
+        <!-- KPIs -->
+        <div id="edVoterKpiRow" class="cardsRow">
+          <div class="kpiCard">
+            <div class="kpiLabel">Äänimäärä yhteensä</div>
+            <div id="edKpiCount" class="kpiValue">-</div>
+          </div>
+          <div class="kpiCard">
+            <div class="kpiLabel">Puolueita aineistossa</div>
+            <div id="edKpiParties" class="kpiValue">-</div>
+          </div>
+          <div class="kpiCard kpiCard--accent2">
+            <div class="kpiLabel">Alueita</div>
+            <div id="edKpiGeos" class="kpiValue">-</div>
+          </div>
+        </div>
+
+        <!-- Party bar -->
+        <div class="card">
+          <h2>Puoluejärjestys valitulla alueella</h2>
+          <canvas id="edPartyBar"></canvas>
+        </div>
+
+        <!-- Party trend line -->
+        <div class="card">
+          <h2>Puolueiden äänimäärät 1983-2023</h2>
+          <canvas id="edSexBar"></canvas>
+        </div>
+
+        <!-- Gender trend -->
+        <div class="card" id="edVoterTrendCard">
+          <h2>Trendi: Miehet / Naiset</h2>
+          <canvas id="edVoterTrendLine"></canvas>
+          <p class="hint">Kehitys eduskuntavaaleissa 1983-2023 valitulla alueella.</p>
+        </div>
+
+      </section>
+    </section><!-- /eduskuntaSection -->
+
+  </body>
+</html>
